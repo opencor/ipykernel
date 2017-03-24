@@ -93,6 +93,13 @@ def loop_qt5(kernel):
     return loop_qt4(kernel)
 
 
+@register_integration('pythonqt')
+def loop_opencor(kernel):
+    """Start a kernel with PythonQt event loop integration."""
+    os.environ['QT_API'] = 'pythonqt'
+    return loop_qt4(kernel)
+
+
 @register_integration('wx')
 def loop_wx(kernel):
     """Start a kernel with wx event loop support."""
