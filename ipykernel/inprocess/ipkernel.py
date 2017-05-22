@@ -37,7 +37,7 @@ class InProcessKernel(IPythonKernel):
     # specified for the normal operation for the kernel, but is required for
     # IPython's GUI support (including pylab). The default is 'inline' because
     # it is safe under all GUI toolkits.
-    gui = Enum(('tk', 'gtk', 'wx', 'qt', 'qt4', 'inline'),
+    gui = Enum(('tk', 'gtk', 'wx', 'qt', 'qt4', 'pythonqt', 'inline'),
                default_value='inline')
 
     raw_input_str = Any()
