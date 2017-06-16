@@ -71,13 +71,9 @@ class InProcessKernel(IPythonKernel):
     def __init__(self, **traits):
         super(InProcessKernel, self).__init__(**traits)
 
+        sys.stdout, sys.stderr = self.stdout, self.stderr
         self._underlying_iopub_socket.observe(self._io_dispatch, names=['message_sent'])
         self.shell.kernel = self
-
-    def execute_request(self, stream, ident, parent):
-        """ Override for temporary IO redirection. """
-        with self._redirected_io():
-            super(InProcessKernel, self).execute_request(stream, ident, parent)
 
     def start(self):
         """ Override registration of dispatchers for streams. """
@@ -108,19 +104,6 @@ class InProcessKernel(IPythonKernel):
         while self.raw_input_str is None:
             frontend.stdin_channel.process_events()
         return self.raw_input_str
-
-    #-------------------------------------------------------------------------
-    # Protected interface
-    #-------------------------------------------------------------------------
-
-    @contextmanager
-    def _redirected_io(self):
-        """ Temporarily redirect IO to the kernel.
-        """
-        sys_stdout, sys_stderr = sys.stdout, sys.stderr
-        sys.stdout, sys.stderr = self.stdout, self.stderr
-        yield
-        sys.stdout, sys.stderr = sys_stdout, sys_stderr
 
     #------ Trait change handlers --------------------------------------------
 
