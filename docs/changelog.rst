@@ -1,6 +1,57 @@
 Changes in IPython kernel
 =========================
 
+4.8
+---
+
+4.8.2
+*****
+
+`4.8.2 on GitHub <https://github.com/ipython/ipykernel/milestones/4.8.2>`__
+
+- Fix compatibility issue with qt eventloop and pyzmq 17 (:ghpull:`307`).
+
+4.8.1
+*****
+
+`4.8.1 on GitHub <https://github.com/ipython/ipykernel/milestones/4.8.1>`__
+
+- set zmq.ROUTER_HANDOVER socket option when available
+  to workaround libzmq reconnect bug (:ghpull:`300`).
+- Fix sdists including absolute paths for kernelspec files,
+  which prevented installation from sdist on Windows
+  (:ghpull:`306`).
+
+4.8.0
+*****
+
+`4.8.0 on GitHub <https://github.com/ipython/ipykernel/milestones/4.8>`__
+
+- Cleanly shutdown integrated event loops when shutting down the kernel.
+  (:ghpull:`290`)
+- ``%gui qt`` now uses Qt 5 by default rather than Qt 4, following a similar
+  change in terminal IPython. (:ghpull:`293`)
+- Fix event loop integration for :mod:`asyncio` when run with Tornado 5,
+  which uses asyncio where available. (:ghpull:`296`)
+
+4.7
+---
+
+4.7.0
+*****
+
+`4.7.0 on GitHub <https://github.com/ipython/ipykernel/milestones/4.7>`__
+
+- Add event loop integration for :mod:`asyncio`.
+- Use the new IPython completer API.
+- Add support for displaying GIF images (mimetype ``image/gif``).
+- Allow the kernel to be interrupted without killing the Qt console.
+- Fix ``is_complete`` response with cell magics.
+- Clean up encoding of bytes objects.
+- Clean up help links to use ``https`` and improve display titles.
+- Clean up ioloop handling in preparation for tornado 5.
+
+
 4.6
 ---
 
@@ -20,8 +71,10 @@ Changes in IPython kernel
 
 - Add to API `DisplayPublisher.publish` two new fully backward-compatible
   keyword-args:
+
     - `update: bool`
     - `transient: dict`
+
 - Support new `transient` key in `display_data` messages spec for `publish`.
   For a display data message, `transient` contains data that shouldn't be
   persisted to files or documents. Add a `display_id` to this `transient`

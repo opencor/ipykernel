@@ -41,6 +41,17 @@ def _notify_stream_qt(kernel, stream):
     fd = stream.getsockopt(zmq.FD)
     notifier = QtCore.QSocketNotifier(fd, QtCore.QSocketNotifier.Read, kernel.app)
     notifier.activated.connect(process_stream_events)
+    # there may already be unprocessed events waiting.
+    # these events will not wake zmq's edge-triggered FD
+    # since edge-triggered notification only occurs on new i/o activity.
+    # process all the waiting events immediately
+    # so we start in a clean state ensuring that any new i/o events will notify.
+    # schedule first call on the eventloop as soon as it's running,
+    # so we don't block here processing events
+    timer = QtCore.QTimer(kernel.app)
+    timer.setSingleShot(True)
+    timer.timeout.connect(process_stream_events)
+    timer.start(0)
 
 # mapping of keys to loop functions
 loop_map = {
@@ -48,7 +59,8 @@ loop_map = {
     'nbagg': None,
     'notebook': None,
     'ipympl': None,
-    None : None,
+    'widget': None,
+    None: None,
 }
 
 def register_integration(*toolkitnames):
@@ -67,6 +79,17 @@ def register_integration(*toolkitnames):
     def decorator(func):
         for name in toolkitnames:
             loop_map[name] = func
+
+        func.exit_hook = lambda kernel: None
+
+        def exit_decorator(exit_func):
+            """@func.exit is now a decorator
+
+            to register a function to be called on exit
+            """
+            func.exit_hook = exit_func
+
+        func.exit = exit_decorator
         return func
 
     return decorator
@@ -84,7 +107,7 @@ def _loop_qt(app):
     app.setProperty('in_event_loop', 0)
 
 
-@register_integration('qt', 'qt4')
+@register_integration('qt4')
 def loop_qt4(kernel):
     """Start a kernel with PyQt4 event loop integration."""
 
@@ -99,11 +122,20 @@ def loop_qt4(kernel):
     _loop_qt(kernel.app)
 
 
-@register_integration('qt5')
+@loop_qt4.exit
+def loop_qt4_exit(kernel):
+    kernel.app.exit()
+
+
+@register_integration('qt', 'qt5')
 def loop_qt5(kernel):
     """Start a kernel with PyQt5 event loop integration."""
     os.environ['QT_API'] = 'pyqt5'
     return loop_qt4(kernel)
+
+@loop_qt5.exit
+def loop_qt5_exit(kernel):
+    kernel.app.exit()
 
 
 @register_integration('pythonqt')
@@ -111,6 +143,10 @@ def loop_opencor(kernel):
     """Start a kernel with PythonQt event loop integration."""
     os.environ['QT_API'] = 'pythonqt'
     return loop_qt4(kernel)
+
+@loop_pythonqt.exit
+def loop_qt5_exit(kernel):
+    kernel.app.exit()
 
 
 def _loop_wx(app):
@@ -177,6 +213,12 @@ def loop_wx(kernel):
     _loop_wx(kernel.app)
 
 
+@loop_wx.exit
+def loop_wx_exit(kernel):
+    import wx
+    wx.Exit()
+
+
 @register_integration('tk')
 def loop_tk(kernel):
     """Start a kernel with the Tk event loop."""
@@ -207,6 +249,11 @@ def loop_tk(kernel):
     kernel.timer.start()
 
 
+@loop_tk.exit
+def loop_tk_exit(kernel):
+    kernel.timer.app.destroy()
+
+
 @register_integration('gtk')
 def loop_gtk(kernel):
     """Start the kernel, coordinating with the GTK event loop"""
@@ -214,6 +261,12 @@ def loop_gtk(kernel):
 
     gtk_kernel = GTKEmbed(kernel)
     gtk_kernel.start()
+    kernel._gtk = gtk_kernel
+
+
+@loop_gtk.exit
+def loop_gtk_exit(kernel):
+    kernel._gtk.stop()
 
 
 @register_integration('gtk3')
@@ -223,6 +276,12 @@ def loop_gtk3(kernel):
 
     gtk_kernel = GTKEmbed(kernel)
     gtk_kernel.start()
+    kernel._gtk = gtk_kernel
+
+
+@loop_gtk3.exit
+def loop_gtk3_exit(kernel):
+    kernel._gtk.stop()
 
 
 @register_integration('osx')
@@ -230,62 +289,27 @@ def loop_cocoa(kernel):
     """Start the kernel, coordinating with the Cocoa CFRunLoop event loop
     via the matplotlib MacOSX backend.
     """
-    import matplotlib
-    if matplotlib.__version__ < '1.1.0':
-        kernel.log.warn(
-        "MacOSX backend in matplotlib %s doesn't have a Timer, "
-        "falling back on Tk for CFRunLoop integration.  Note that "
-        "even this won't work if Tk is linked against X11 instead of "
-        "Cocoa (e.g. EPD).  To use the MacOSX backend in the kernel, "
-        "you must use matplotlib >= 1.1.0, or a native libtk."
-        )
-        return loop_tk(kernel)
-
-    from matplotlib.backends.backend_macosx import TimerMac, show
-
-    # scale interval for sec->ms
-    poll_interval = int(1000*kernel._poll_interval)
+    from ._eventloop_macos import mainloop, stop
 
     real_excepthook = sys.excepthook
     def handle_int(etype, value, tb):
         """don't let KeyboardInterrupts look like crashes"""
+        # wake the eventloop when we get a signal
+        stop()
         if etype is KeyboardInterrupt:
             io.raw_print("KeyboardInterrupt caught in CFRunLoop")
         else:
             real_excepthook(etype, value, tb)
 
-    # add doi() as a Timer to the CFRunLoop
-    def doi():
-        # restore excepthook during IPython code
-        sys.excepthook = real_excepthook
-        kernel.do_one_iteration()
-        # and back:
-        sys.excepthook = handle_int
-
-    t = TimerMac(poll_interval)
-    t.add_callback(doi)
-    t.start()
-
-    # but still need a Poller for when there are no active windows,
-    # during which time mainloop() returns immediately
-    poller = zmq.Poller()
-    if kernel.control_stream:
-        poller.register(kernel.control_stream.socket, zmq.POLLIN)
-    for stream in kernel.shell_streams:
-        poller.register(stream.socket, zmq.POLLIN)
-
-    while True:
+    while not kernel.shell.exit_now:
         try:
             # double nested try/except, to properly catch KeyboardInterrupt
             # due to pyzmq Issue #130
             try:
                 # don't let interrupts during mainloop invoke crash_handler:
                 sys.excepthook = handle_int
-                show.mainloop()
+                mainloop(kernel._poll_interval)
                 sys.excepthook = real_excepthook
-                # use poller if mainloop returned (no windows)
-                # scale by extra factor of 10, since it's a real poll
-                poller.poll(10*poll_interval)
                 kernel.do_one_iteration()
             except:
                 raise
@@ -296,6 +320,50 @@ def loop_cocoa(kernel):
             # ensure excepthook is restored
             sys.excepthook = real_excepthook
 
+
+@loop_cocoa.exit
+def loop_cocoa_exit(kernel):
+    from ._eventloop_macos import stop
+    stop()
+
+
+@register_integration('asyncio')
+def loop_asyncio(kernel):
+    '''Start a kernel with asyncio event loop support.'''
+    import asyncio
+    loop = asyncio.get_event_loop()
+    # loop is already running (e.g. tornado 5), nothing left to do
+    if loop.is_running():
+        return
+
+    def kernel_handler():
+        loop.call_soon(kernel.do_one_iteration)
+        loop.call_later(kernel._poll_interval, kernel_handler)
+
+    loop.call_soon(kernel_handler)
+    while True:
+        error = None
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            continue
+        except Exception as e:
+            error = e
+        if hasattr(loop, 'shutdown_asyncgens'):
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+        if error is not None:
+            raise error
+        break
+
+
+@loop_asyncio.exit
+def loop_asyncio_exit(kernel):
+    """Exit hook for asyncio"""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        loop.call_soon(loop.stop)
 
 
 def enable_gui(gui, kernel=None):

@@ -469,8 +469,12 @@ class ZMQInteractiveShell(InteractiveShell):
     def _update_exit_now(self, change):
         """stop eventloop when exit_now fires"""
         if change['new']:
-            loop = ioloop.IOLoop.instance()
-            loop.add_timeout(time.time() + 0.1, loop.stop)
+            loop = self.kernel.io_loop
+            loop.call_later(0.1, loop.stop)
+            if self.kernel.eventloop:
+                exit_hook = getattr(self.kernel.eventloop, 'exit_hook', None)
+                if exit_hook:
+                    exit_hook(self.kernel)
 
     keepkernel_on_exit = None
 

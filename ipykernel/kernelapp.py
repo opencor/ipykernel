@@ -248,6 +248,14 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp,
         self.control_port = self._bind_socket(self.control_socket, self.control_port)
         self.log.debug("control ROUTER Channel on port: %i" % self.control_port)
 
+        if hasattr(zmq, 'ROUTER_HANDOVER'):
+            # set router-handover to workaround zeromq reconnect problems
+            # in certain rare circumstances
+            # see ipython/ipykernel#270 and zeromq/libzmq#2892
+            self.shell_socket.router_handover = \
+                self.control_socket.router_handover = \
+                self.stdin_socket.router_handover = 1
+
         self.init_iopub(context)
 
     def init_iopub(self, context):
@@ -473,8 +481,9 @@ class IPKernelApp(BaseIPythonApplication, InteractiveShellApp,
         if self.poller is not None:
             self.poller.start()
         self.kernel.start()
+        self.io_loop = ioloop.IOLoop.current()
         try:
-            ioloop.IOLoop.instance().start()
+            self.io_loop.start()
         except KeyboardInterrupt:
             pass
 

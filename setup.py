@@ -97,12 +97,19 @@ if any(a.startswith(('bdist', 'build', 'install')) for a in sys.argv):
     write_kernel_spec(dest, overrides={'argv': argv})
 
     setup_args['data_files'] = [
-        (pjoin('share', 'jupyter', 'kernels', KERNEL_NAME), glob(pjoin(dest, '*'))),
+        (pjoin('share', 'jupyter', 'kernels', KERNEL_NAME),
+         glob(pjoin('data_kernelspec', '*'))),
     ]
 
 extras_require = setuptools_args['extras_require'] = {
     'test:python_version=="2.7"': ['mock'],
-    'test': ['nose_warnings_filters', 'nose-timer'],
+    # pytest 3.3 doesn't work on Python 3.3
+    'test:python_version=="3.3"': ['pytest==3.2.*'],
+    'test:python_version!="3.3"': ['pytest>=3.2'],
+    'test': [
+        'pytest-cov',
+        'nose', # nose because there are still a few nose.tools imports hanging around
+    ],
 }
 
 if 'setuptools' in sys.modules:

@@ -33,7 +33,10 @@ import shlex
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
+    'sphinxcontrib_github_alt',
 ]
+
+github_project_url = "https://github.com/ipython/ipykernel"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -297,7 +300,7 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    'https://docs.python.org/': None,
+    'python': ('https://docs.python.org/3/', None),
     'ipython': ('https://ipython.readthedocs.io/en/latest', None),
     'jupyter': ('https://jupyter.readthedocs.io/en/latest', None),
 }
