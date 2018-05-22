@@ -139,13 +139,13 @@ def loop_qt5_exit(kernel):
 
 
 @register_integration('pythonqt')
-def loop_opencor(kernel):
+def loop_pythonqt(kernel):
     """Start a kernel with PythonQt event loop integration."""
     os.environ['QT_API'] = 'pythonqt'
     return loop_qt4(kernel)
 
 @loop_pythonqt.exit
-def loop_qt5_exit(kernel):
+def loop_pythonqt_exit(kernel):
     kernel.app.exit()
 
 
