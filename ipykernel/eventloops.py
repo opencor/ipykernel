@@ -102,9 +102,9 @@ def _loop_qt(app):
     since IPython 5.2 only checks `get_ipython().active_eventloop` is defined,
     rather than if the eventloop is actually running.
     """
-    app._in_event_loop = True
+    app.setProperty('in_event_loop', 1)
     app.exec_()
-    app._in_event_loop = False
+    app.setProperty('in_event_loop', 0)
 
 
 @register_integration('qt4')
@@ -129,9 +129,17 @@ def loop_qt5(kernel):
     return loop_qt4(kernel)
 
 
-# exit and watch are the same for qt 4 and 5
+@register_integration('pythonqt')
+def loop_pythonqt(kernel):
+    """Start a kernel with PythonQt event loop integration."""
+    os.environ['QT_API'] = 'pythonqt'
+    return loop_qt4(kernel)
+
+
+# exit and watch are the same for qt 4, qt 5 and pythonqt
 @loop_qt4.exit
 @loop_qt5.exit
+@loop_pythonqt.exit
 def loop_qt_exit(kernel):
     kernel.app.exit()
 
